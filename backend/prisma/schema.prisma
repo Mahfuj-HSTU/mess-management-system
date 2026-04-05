@@ -10,21 +10,23 @@ datasource db {
 // ─── Better Auth Required Models ─────────────────────────────────────────────
 
 model User {
-  id            String    @id
+  id            String   @id
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  sessions    Session[]
-  accounts    Account[]
-  messMembers MessMember[]
-  mealsAdded  Meal[]       @relation("MealAddedBy")
-  bazaars     Bazaar[]
-  paymentsMade Payment[]   @relation("PaymentAddedBy")
-  paymentsReceived Payment[] @relation("PaymentMember")
+  sessions         Session[]
+  accounts         Account[]
+  messMembers      MessMember[]
+  monthlyManaging  MonthlyManager[]
+  mealsAdded       Meal[]           @relation("MealAddedBy")
+  bazaars          Bazaar[]
+  paymentsMade     Payment[]        @relation("PaymentAddedBy")
+  paymentsReceived Payment[]        @relation("PaymentMember")
+  mealConfigsSet   MealConfig[]
 }
 
 model Session {
@@ -57,30 +59,33 @@ model Account {
 }
 
 model Verification {
-  id         String    @id
+  id         String   @id
   identifier String
   value      String
   expiresAt  DateTime
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // ─── Mess Management Models ───────────────────────────────────────────────────
 
 model Mess {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  members     MessMember[]
-  meals       Meal[]
-  bazaars     Bazaar[]
-  payments    Payment[]
-  cash        ManagerCash?
+  members         MessMember[]
+  monthlyManagers MonthlyManager[]
+  meals           Meal[]
+  bazaars         Bazaar[]
+  payments        Payment[]
+  cash            ManagerCash?
+  mealConfig      MealConfig?
 }
 
+// Only two permanent roles: super admin (created the mess) and regular member
 model MessMember {
   id       String     @id @default(cuid())
   messId   String
@@ -96,22 +101,51 @@ model MessMember {
 
 enum MemberRole {
   SUPER_ADMIN
-  MANAGER
   MEMBER
 }
 
-model Meal {
+// Super admin assigns one manager per month. Different months can have different managers.
+model MonthlyManager {
+  id         String   @id @default(cuid())
+  messId     String
+  userId     String
+  month      Int      // 1–12
+  year       Int
+  assignedAt DateTime @default(now())
+
+  mess Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messId, month, year]) // one manager per month per mess
+}
+
+// Manager configures how many meals each type counts as.
+// breakfast defaults to 0 (ignored). Manager can enable it with a non-zero value.
+model MealConfig {
   id          String   @id @default(cuid())
-  messId      String
-  userId      String
-  date        DateTime @db.Date
-  breakfast   Boolean  @default(false)
-  lunch       Boolean  @default(false)
-  dinner      Boolean  @default(false)
-  totalMeals  Float    @default(0)
-  addedById   String
-  createdAt   DateTime @default(now())
+  messId      String   @unique
+  breakfast   Float    @default(0)   // 0 = disabled / not counted
+  lunch       Float    @default(1)
+  dinner      Float    @default(1)
+  updatedById String
   updatedAt   DateTime @updatedAt
+
+  mess      Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
+  updatedBy User @relation(fields: [updatedById], references: [id])
+}
+
+model Meal {
+  id         String   @id @default(cuid())
+  messId     String
+  userId     String
+  date       DateTime @db.Date
+  breakfast  Boolean  @default(false)
+  lunch      Boolean  @default(false)
+  dinner     Boolean  @default(false)
+  totalMeals Float    @default(0) // stored at entry time using current MealConfig
+  addedById  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   mess    Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
   addedBy User @relation("MealAddedBy", fields: [addedById], references: [id])
@@ -142,9 +176,9 @@ model Payment {
   addedById String
   createdAt DateTime @default(now())
 
-  mess     Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
-  member   User @relation("PaymentMember", fields: [memberId], references: [id])
-  addedBy  User @relation("PaymentAddedBy", fields: [addedById], references: [id])
+  mess    Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
+  member  User @relation("PaymentMember", fields: [memberId], references: [id])
+  addedBy User @relation("PaymentAddedBy", fields: [addedById], references: [id])
 }
 
 model ManagerCash {

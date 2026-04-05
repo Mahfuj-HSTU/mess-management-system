@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
-import { messApi } from "@/lib/api";
+import { useJoinMessMutation } from "@/store/api";
 import Button from "@/components/ui/button";
 import Input from "@/components/ui/input";
 import { ChefHat, Hash } from "lucide-react";
@@ -15,7 +15,8 @@ export default function JoinPage() {
   const { data: session } = useSession();
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const [joinMess, { isLoading }] = useJoinMessMutation();
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,16 +31,16 @@ export default function JoinPage() {
       return;
     }
 
-    setLoading(true);
     try {
-      await messApi.join(code.trim());
+      await joinMess({ code: code.trim() }).unwrap();
       toast.success("Successfully joined the mess!");
       router.push("/dashboard");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to join mess";
-      toast.error(msg);
-    } finally {
-      setLoading(false);
+      const msg =
+        typeof err === "object" && err !== null && "data" in err
+          ? (err as { data?: { error?: string } }).data?.error
+          : undefined;
+      toast.error(msg ?? "Failed to join mess");
     }
   };
 
@@ -79,7 +80,7 @@ export default function JoinPage() {
 
             <Button
               type="submit"
-              loading={loading}
+              loading={isLoading}
               className="w-full"
               size="lg"
             >

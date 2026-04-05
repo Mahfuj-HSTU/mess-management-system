@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
+import Providers from "@/providers";
 
 export const metadata: Metadata = {
   title: "Mess Management System",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-gray-50 text-gray-900 antialiased">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         <Toaster
           position="top-right"
           toastOptions={{
@@ -26,12 +29,8 @@ export default function RootLayout({
               borderRadius: "10px",
               fontSize: "14px",
             },
-            success: {
-              iconTheme: { primary: "#22c55e", secondary: "#f9fafb" },
-            },
-            error: {
-              iconTheme: { primary: "#ef4444", secondary: "#f9fafb" },
-            },
+            success: { iconTheme: { primary: "#22c55e", secondary: "#f9fafb" } },
+            error:   { iconTheme: { primary: "#ef4444", secondary: "#f9fafb" } },
           }}
         />
       </body>

@@ -9,20 +9,23 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.5.0",
     "better-auth": "^1.2.7",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.468.0",
     "next": "15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.468.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.5",
     "react-hot-toast": "^2.4.1",
-    "date-fns": "^4.1.0"
+    "react-redux": "^9.2.0",
+    "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
     "eslint": "^9.0.0",
     "eslint-config-next": "15.1.0",
     "postcss": "^8.5.1",

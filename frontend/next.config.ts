@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    serverActions: {
-      allowedOrigins: ["localhost:3000"],
-    },
-  },
+  // Required for react-redux and @reduxjs/toolkit to work correctly
+  // with Next.js App Router (server/client boundary)
+  transpilePackages: ["@reduxjs/toolkit", "react-redux"],
 };
 
 export default nextConfig;

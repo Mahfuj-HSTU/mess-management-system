@@ -1,22 +1,23 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-
-function calcTotal(breakfast: boolean, lunch: boolean, dinner: boolean): number {
-  // breakfast = 0.5 meal, lunch = 1, dinner = 1
-  return (breakfast ? 0.5 : 0) + (lunch ? 1 : 0) + (dinner ? 1 : 0);
-}
+import { assertMonthlyManager, monthYearFromDate } from "../lib/permissions";
 
 // POST /api/meals/:messId
 export async function addMeal(req: Request, res: Response) {
-  const { userId, date, breakfast = false, lunch = false, dinner = false } = req.body;
   const messId = req.params.messId;
+  const { userId, date, breakfast = false, lunch = false, dinner = false } = req.body;
 
   if (!userId || !date) {
     res.status(400).json({ error: "userId and date are required." });
     return;
   }
 
-  // Ensure target user is a member
+  // Only the monthly manager for that date's month can add meals
+  const { month, year } = monthYearFromDate(date);
+  const allowed = await assertMonthlyManager(messId, req.userId, month, year, res);
+  if (!allowed) return;
+
+  // Target user must be a mess member
   const member = await prisma.messMember.findUnique({
     where: { messId_userId: { messId, userId } },
   });
@@ -25,22 +26,21 @@ export async function addMeal(req: Request, res: Response) {
     return;
   }
 
-  const totalMeals = calcTotal(breakfast, lunch, dinner);
-  const mealDate = new Date(date);
+  // Get meal config to calculate the correct meal count
+  const config = await prisma.mealConfig.findUnique({ where: { messId } });
+  const breakfastVal = config?.breakfast ?? 0;
+  const lunchVal     = config?.lunch     ?? 1;
+  const dinnerVal    = config?.dinner    ?? 1;
+
+  const totalMeals =
+    (breakfast ? breakfastVal : 0) +
+    (lunch     ? lunchVal     : 0) +
+    (dinner    ? dinnerVal    : 0);
 
   const meal = await prisma.meal.upsert({
-    where: { messId_userId_date: { messId, userId, date: mealDate } },
+    where:  { messId_userId_date: { messId, userId, date: new Date(date) } },
     update: { breakfast, lunch, dinner, totalMeals, addedById: req.userId },
-    create: {
-      messId,
-      userId,
-      date: mealDate,
-      breakfast,
-      lunch,
-      dinner,
-      totalMeals,
-      addedById: req.userId,
-    },
+    create: { messId, userId, date: new Date(date), breakfast, lunch, dinner, totalMeals, addedById: req.userId },
     include: { addedBy: { select: { name: true } } },
   });
 
@@ -50,71 +50,39 @@ export async function addMeal(req: Request, res: Response) {
 // GET /api/meals/:messId?month=&year=
 export async function getMeals(req: Request, res: Response) {
   const messId = req.params.messId;
-  const month = Number(req.query.month) || new Date().getMonth() + 1;
-  const year = Number(req.query.year) || new Date().getFullYear();
+  const month  = Number(req.query.month) || new Date().getMonth() + 1;
+  const year   = Number(req.query.year)  || new Date().getFullYear();
 
   const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0); // last day of month
+  const endDate   = new Date(year, month, 0);
 
-  const meals = await prisma.meal.findMany({
-    where: {
-      messId,
-      date: { gte: startDate, lte: endDate },
-    },
-    include: {
-      addedBy: { select: { id: true, name: true } },
-    },
-    orderBy: [{ date: "asc" }],
-  });
+  const [meals, members] = await Promise.all([
+    prisma.meal.findMany({
+      where:   { messId, date: { gte: startDate, lte: endDate } },
+      include: { addedBy: { select: { id: true, name: true } } },
+      orderBy: { date: "asc" },
+    }),
+    prisma.messMember.findMany({
+      where:   { messId },
+      include: { user: { select: { id: true, name: true } } },
+    }),
+  ]);
 
-  // Get member info for context
-  const members = await prisma.messMember.findMany({
-    where: { messId },
-    include: { user: { select: { id: true, name: true } } },
-  });
-
-  // Build summary per member
+  // Build per-member summary
   const summary = members.map((m) => {
     const memberMeals = meals.filter((meal) => meal.userId === m.userId);
-    const totalBreakfast = memberMeals.filter((meal) => meal.breakfast).length;
-    const totalLunch = memberMeals.filter((meal) => meal.lunch).length;
-    const totalDinner = memberMeals.filter((meal) => meal.dinner).length;
-    const totalMeals = memberMeals.reduce((sum, meal) => sum + meal.totalMeals, 0);
     return {
-      userId: m.userId,
-      name: m.user.name,
-      role: m.role,
-      totalBreakfast,
-      totalLunch,
-      totalDinner,
-      totalMeals,
+      userId:         m.userId,
+      name:           m.user.name,
+      role:           m.role,
+      totalBreakfast: memberMeals.filter((meal) => meal.breakfast).length,
+      totalLunch:     memberMeals.filter((meal) => meal.lunch).length,
+      totalDinner:    memberMeals.filter((meal) => meal.dinner).length,
+      totalMeals:     memberMeals.reduce((sum, meal) => sum + meal.totalMeals, 0),
     };
   });
 
   res.json({ meals, summary });
-}
-
-// GET /api/meals/:messId/member/:userId?month=&year=
-export async function getMemberMeals(req: Request, res: Response) {
-  const { messId, userId } = req.params;
-  const month = Number(req.query.month) || new Date().getMonth() + 1;
-  const year = Number(req.query.year) || new Date().getFullYear();
-
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0);
-
-  const meals = await prisma.meal.findMany({
-    where: {
-      messId,
-      userId,
-      date: { gte: startDate, lte: endDate },
-    },
-    orderBy: { date: "asc" },
-  });
-
-  const totalMeals = meals.reduce((sum, m) => sum + m.totalMeals, 0);
-
-  res.json({ meals, totalMeals });
 }
 
 // DELETE /api/meals/:messId/:mealId
@@ -126,6 +94,11 @@ export async function deleteMeal(req: Request, res: Response) {
     res.status(404).json({ error: "Meal not found." });
     return;
   }
+
+  // Check monthly manager permission for the meal's date
+  const { month, year } = monthYearFromDate(meal.date.toISOString());
+  const allowed = await assertMonthlyManager(messId, req.userId, month, year, res);
+  if (!allowed) return;
 
   await prisma.meal.delete({ where: { id: mealId } });
   res.json({ message: "Meal deleted." });

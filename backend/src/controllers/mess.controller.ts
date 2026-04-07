@@ -15,19 +15,13 @@ export async function createMess(req: Request, res: Response) {
     return;
   }
 
-  // Check if user already belongs to a mess
-  const existing = await prisma.messMember.findFirst({
-    where: { userId: req.userId },
-  });
+  const existing = await prisma.messMember.findFirst({ where: { userId: req.userId } });
   if (existing) {
-    res
-      .status(400)
-      .json({ error: "You already belong to a mess. Leave it first." });
+    res.status(400).json({ error: "You already belong to a mess." });
     return;
   }
 
   let code = generateMessCode();
-  // Ensure uniqueness
   while (await prisma.mess.findUnique({ where: { code } })) {
     code = generateMessCode();
   }
@@ -37,14 +31,10 @@ export async function createMess(req: Request, res: Response) {
       name: name.trim(),
       code,
       members: {
-        create: {
-          userId: req.userId,
-          role: MemberRole.SUPER_ADMIN,
-        },
+        create: { userId: req.userId, role: MemberRole.SUPER_ADMIN },
       },
-      cash: {
-        create: { balance: 0 },
-      },
+      cash:   { create: { balance: 0 } },
+      mealConfig: { create: { breakfast: 0, lunch: 1, dinner: 1, updatedById: req.userId } },
     },
     include: {
       members: { include: { user: { select: { id: true, name: true, email: true } } } },
@@ -64,7 +54,7 @@ export async function joinMess(req: Request, res: Response) {
 
   const mess = await prisma.mess.findUnique({ where: { code: code.trim().toUpperCase() } });
   if (!mess) {
-    res.status(404).json({ error: "Invalid mess code. No mess found." });
+    res.status(404).json({ error: "Invalid mess code." });
     return;
   }
 
@@ -76,20 +66,14 @@ export async function joinMess(req: Request, res: Response) {
     return;
   }
 
-  const existingMess = await prisma.messMember.findFirst({
-    where: { userId: req.userId },
-  });
-  if (existingMess) {
+  const inAnotherMess = await prisma.messMember.findFirst({ where: { userId: req.userId } });
+  if (inAnotherMess) {
     res.status(400).json({ error: "You already belong to another mess." });
     return;
   }
 
   const member = await prisma.messMember.create({
-    data: {
-      messId: mess.id,
-      userId: req.userId,
-      role: MemberRole.MEMBER,
-    },
+    data: { messId: mess.id, userId: req.userId, role: MemberRole.MEMBER },
     include: { mess: true },
   });
 
@@ -104,11 +88,10 @@ export async function getMyMess(req: Request, res: Response) {
       mess: {
         include: {
           members: {
-            include: {
-              user: { select: { id: true, name: true, email: true, image: true } },
-            },
+            include: { user: { select: { id: true, name: true, email: true, image: true } } },
             orderBy: { joinedAt: "asc" },
           },
+          mealConfig: true,
         },
       },
     },
@@ -122,63 +105,63 @@ export async function getMyMess(req: Request, res: Response) {
   res.json({ mess: membership.mess, role: membership.role });
 }
 
-// GET /api/mess/:messId
-export async function getMessById(req: Request, res: Response) {
-  const mess = await prisma.mess.findUnique({
-    where: { id: req.params.messId },
-    include: {
-      members: {
-        include: {
-          user: { select: { id: true, name: true, email: true, image: true } },
-        },
-        orderBy: { joinedAt: "asc" },
-      },
-    },
+// GET /api/mess/:messId/monthly-manager?month=&year=
+// Returns who is the monthly manager for a given month (null if not assigned)
+export async function getMonthlyManager(req: Request, res: Response) {
+  const messId = req.params.messId;
+  const month  = Number(req.query.month) || new Date().getMonth() + 1;
+  const year   = Number(req.query.year)  || new Date().getFullYear();
+
+  const record = await prisma.monthlyManager.findUnique({
+    where: { messId_month_year: { messId, month, year } },
+    include: { user: { select: { id: true, name: true, email: true } } },
   });
 
-  if (!mess) {
-    res.status(404).json({ error: "Mess not found." });
-    return;
-  }
-
-  res.json({ mess });
+  res.json({ manager: record ?? null });
 }
 
-// POST /api/mess/:messId/assign-manager
-export async function assignManager(req: Request, res: Response) {
-  const { userId } = req.body;
-  const messId = req.params.messId;
+// POST /api/mess/:messId/assign-monthly-manager   (super admin only)
+// Assigns a member as manager for a specific month+year.
+// If that month already has a manager, they are replaced.
+export async function assignMonthlyManager(req: Request, res: Response) {
+  const messId        = req.params.messId;
+  const { userId, month, year } = req.body;
 
-  if (!userId) {
-    res.status(400).json({ error: "userId is required." });
+  if (!userId || !month || !year) {
+    res.status(400).json({ error: "userId, month and year are required." });
+    return;
+  }
+  if (month < 1 || month > 12) {
+    res.status(400).json({ error: "month must be between 1 and 12." });
     return;
   }
 
+  // Target user must be a mess member (but not the super admin themselves)
   const targetMember = await prisma.messMember.findUnique({
     where: { messId_userId: { messId, userId } },
+    include: { user: { select: { id: true, name: true } } },
   });
   if (!targetMember) {
     res.status(404).json({ error: "User is not a member of this mess." });
     return;
   }
   if (targetMember.role === MemberRole.SUPER_ADMIN) {
-    res.status(400).json({ error: "Cannot change super admin's role." });
+    res.status(400).json({ error: "Super admin cannot be assigned as a monthly manager." });
     return;
   }
 
-  // Demote existing manager if any
-  await prisma.messMember.updateMany({
-    where: { messId, role: MemberRole.MANAGER },
-    data: { role: MemberRole.MEMBER },
-  });
-
-  const updated = await prisma.messMember.update({
-    where: { messId_userId: { messId, userId } },
-    data: { role: MemberRole.MANAGER },
+  // Upsert: create or replace the monthly manager for that month
+  const record = await prisma.monthlyManager.upsert({
+    where:  { messId_month_year: { messId, month: Number(month), year: Number(year) } },
+    update: { userId },
+    create: { messId, userId, month: Number(month), year: Number(year) },
     include: { user: { select: { id: true, name: true, email: true } } },
   });
 
-  res.json({ member: updated, message: `${updated.user.name} is now the manager.` });
+  res.json({
+    manager: record,
+    message: `${targetMember.user.name} is now the manager for month ${month}/${year}.`,
+  });
 }
 
 // DELETE /api/mess/:messId/leave

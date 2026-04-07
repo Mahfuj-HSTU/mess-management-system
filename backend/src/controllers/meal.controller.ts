@@ -5,7 +5,7 @@ import { assertMonthlyManager, monthYearFromDate } from "../lib/permissions";
 // POST /api/meals/:messId
 export async function addMeal(req: Request, res: Response) {
   const messId = req.params.messId;
-  const { userId, date, breakfast = false, lunch = false, dinner = false } = req.body;
+  const { userId, date, breakfast = false, lunch = false, dinner = false, guestMeals = 0 } = req.body;
 
   if (!userId || !date) {
     res.status(400).json({ error: "userId and date are required." });
@@ -32,15 +32,17 @@ export async function addMeal(req: Request, res: Response) {
   const lunchVal     = config?.lunch     ?? 1;
   const dinnerVal    = config?.dinner    ?? 1;
 
+  const safeGuestMeals = Math.max(0, Math.floor(Number(guestMeals) || 0));
   const totalMeals =
     (breakfast ? breakfastVal : 0) +
     (lunch     ? lunchVal     : 0) +
-    (dinner    ? dinnerVal    : 0);
+    (dinner    ? dinnerVal    : 0) +
+    safeGuestMeals;
 
   const meal = await prisma.meal.upsert({
     where:  { messId_userId_date: { messId, userId, date: new Date(date) } },
-    update: { breakfast, lunch, dinner, totalMeals, addedById: req.userId },
-    create: { messId, userId, date: new Date(date), breakfast, lunch, dinner, totalMeals, addedById: req.userId },
+    update: { breakfast, lunch, dinner, guestMeals: safeGuestMeals, totalMeals, addedById: req.userId },
+    create: { messId, userId, date: new Date(date), breakfast, lunch, dinner, guestMeals: safeGuestMeals, totalMeals, addedById: req.userId },
     include: { addedBy: { select: { name: true } } },
   });
 
@@ -72,13 +74,14 @@ export async function getMeals(req: Request, res: Response) {
   const summary = members.map((m) => {
     const memberMeals = meals.filter((meal) => meal.userId === m.userId);
     return {
-      userId:         m.userId,
-      name:           m.user.name,
-      role:           m.role,
-      totalBreakfast: memberMeals.filter((meal) => meal.breakfast).length,
-      totalLunch:     memberMeals.filter((meal) => meal.lunch).length,
-      totalDinner:    memberMeals.filter((meal) => meal.dinner).length,
-      totalMeals:     memberMeals.reduce((sum, meal) => sum + meal.totalMeals, 0),
+      userId:          m.userId,
+      name:            m.user.name,
+      role:            m.role,
+      totalBreakfast:  memberMeals.filter((meal) => meal.breakfast).length,
+      totalLunch:      memberMeals.filter((meal) => meal.lunch).length,
+      totalDinner:     memberMeals.filter((meal) => meal.dinner).length,
+      totalGuestMeals: memberMeals.reduce((sum, meal) => sum + (meal.guestMeals || 0), 0),
+      totalMeals:      memberMeals.reduce((sum, meal) => sum + meal.totalMeals, 0),
     };
   });
 

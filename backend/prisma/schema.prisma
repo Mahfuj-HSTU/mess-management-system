@@ -142,8 +142,9 @@ model Meal {
   breakfast  Boolean  @default(false)
   lunch      Boolean  @default(false)
   dinner     Boolean  @default(false)
-  totalMeals Float    @default(0) // stored at entry time using current MealConfig
-  addedById  String
+  totalMeals  Float    @default(0) // stored at entry time using current MealConfig
+  guestMeals  Int      @default(0) // extra meals for guests brought by this member
+  addedById   String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

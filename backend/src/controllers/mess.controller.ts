@@ -186,3 +186,31 @@ export async function leaveMess(req: Request, res: Response) {
 
   res.json({ message: "You have left the mess." });
 }
+
+// PATCH /api/mess/:messId/membership — super admin toggles their own isMember status
+export async function updateSuperAdminMembership(req: Request, res: Response) {
+  const { messId } = req.params;
+  const { isMember } = req.body;
+
+  if (typeof isMember !== "boolean") {
+    res.status(400).json({ error: "isMember must be a boolean." });
+    return;
+  }
+
+  // Only super admin can do this — and only for themselves
+  const member = await prisma.messMember.findUnique({
+    where: { messId_userId: { messId, userId: req.userId } },
+  });
+  if (!member || member.role !== MemberRole.SUPER_ADMIN) {
+    res.status(403).json({ error: "Only the super admin can update their own membership status." });
+    return;
+  }
+
+  const updated = await prisma.messMember.update({
+    where: { messId_userId: { messId, userId: req.userId } },
+    data:  { isMember },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+
+  res.json({ member: updated, message: isMember ? "You are now counted as a member." : "You are now excluded from meal tracking." });
+}

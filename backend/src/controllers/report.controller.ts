@@ -19,7 +19,7 @@ export async function getMonthlyReport(req: Request, res: Response) {
 
   const [members, meals, bazaars, payments, monthlyManager] = await Promise.all([
     prisma.messMember.findMany({
-      where:   { messId },
+      where:   { messId, isMember: true },
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: { joinedAt: "asc" },
     }),
@@ -136,7 +136,7 @@ export async function sendDueReminders(req: Request, res: Response) {
 
   const [members, meals, bazaars, payments] = await Promise.all([
     prisma.messMember.findMany({
-      where:   { messId },
+      where:   { messId, isMember: true },
       include: { user: { select: { id: true, name: true, email: true } } },
     }),
     prisma.meal.findMany({ where: { messId, date: { gte: startDate, lte: endDate } } }),

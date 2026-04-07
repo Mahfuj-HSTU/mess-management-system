@@ -91,6 +91,7 @@ model MessMember {
   messId   String
   userId   String
   role     MemberRole @default(MEMBER)
+  isMember Boolean    @default(true)  // super admin can opt out of meal tracking
   joinedAt DateTime   @default(now())
 
   mess Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
@@ -142,9 +143,11 @@ model Meal {
   breakfast  Boolean  @default(false)
   lunch      Boolean  @default(false)
   dinner     Boolean  @default(false)
-  totalMeals  Float    @default(0) // stored at entry time using current MealConfig
-  guestMeals  Int      @default(0) // extra meals for guests brought by this member
-  addedById   String
+  totalMeals     Float @default(0) // stored at entry time using current MealConfig
+  guestBreakfast Int   @default(0)
+  guestLunch     Int   @default(0)
+  guestDinner    Int   @default(0)
+  addedById      String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

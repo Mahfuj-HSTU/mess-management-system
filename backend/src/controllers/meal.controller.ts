@@ -2,22 +2,24 @@ import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { assertMonthlyManager, monthYearFromDate } from "../lib/permissions";
 
-// POST /api/meals/:messId
+// POST /api/meals/:messId — upsert meal for a member on a date
 export async function addMeal(req: Request, res: Response) {
   const messId = req.params.messId;
-  const { userId, date, breakfast = false, lunch = false, dinner = false, guestMeals = 0 } = req.body;
+  const {
+    userId, date,
+    breakfast = false, lunch = false, dinner = false,
+    guestBreakfast = 0, guestLunch = 0, guestDinner = 0,
+  } = req.body;
 
   if (!userId || !date) {
     res.status(400).json({ error: "userId and date are required." });
     return;
   }
 
-  // Only the monthly manager for that date's month can add meals
   const { month, year } = monthYearFromDate(date);
   const allowed = await assertMonthlyManager(messId, req.userId, month, year, res);
   if (!allowed) return;
 
-  // Target user must be a mess member
   const member = await prisma.messMember.findUnique({
     where: { messId_userId: { messId, userId } },
   });
@@ -26,23 +28,37 @@ export async function addMeal(req: Request, res: Response) {
     return;
   }
 
-  // Get meal config to calculate the correct meal count
   const config = await prisma.mealConfig.findUnique({ where: { messId } });
   const breakfastVal = config?.breakfast ?? 0;
   const lunchVal     = config?.lunch     ?? 1;
   const dinnerVal    = config?.dinner    ?? 1;
 
-  const safeGuestMeals = Math.max(0, Math.floor(Number(guestMeals) || 0));
+  const safeGB = Math.max(0, Math.floor(Number(guestBreakfast) || 0));
+  const safeGL = Math.max(0, Math.floor(Number(guestLunch)     || 0));
+  const safeGD = Math.max(0, Math.floor(Number(guestDinner)    || 0));
+
+  // Each guest meal type follows the same config multiplier as the member meal
   const totalMeals =
     (breakfast ? breakfastVal : 0) +
     (lunch     ? lunchVal     : 0) +
     (dinner    ? dinnerVal    : 0) +
-    safeGuestMeals;
+    safeGB * breakfastVal +
+    safeGL * lunchVal +
+    safeGD * dinnerVal;
 
   const meal = await prisma.meal.upsert({
     where:  { messId_userId_date: { messId, userId, date: new Date(date) } },
-    update: { breakfast, lunch, dinner, guestMeals: safeGuestMeals, totalMeals, addedById: req.userId },
-    create: { messId, userId, date: new Date(date), breakfast, lunch, dinner, guestMeals: safeGuestMeals, totalMeals, addedById: req.userId },
+    update: {
+      breakfast, lunch, dinner,
+      guestBreakfast: safeGB, guestLunch: safeGL, guestDinner: safeGD,
+      totalMeals, addedById: req.userId,
+    },
+    create: {
+      messId, userId, date: new Date(date),
+      breakfast, lunch, dinner,
+      guestBreakfast: safeGB, guestLunch: safeGL, guestDinner: safeGD,
+      totalMeals, addedById: req.userId,
+    },
     include: { addedBy: { select: { name: true } } },
   });
 
@@ -65,23 +81,25 @@ export async function getMeals(req: Request, res: Response) {
       orderBy: { date: "asc" },
     }),
     prisma.messMember.findMany({
-      where:   { messId },
+      where:   { messId, isMember: true },
       include: { user: { select: { id: true, name: true } } },
+      orderBy: { joinedAt: "asc" },
     }),
   ]);
 
-  // Build per-member summary
   const summary = members.map((m) => {
-    const memberMeals = meals.filter((meal) => meal.userId === m.userId);
+    const mm = meals.filter((meal) => meal.userId === m.userId);
     return {
-      userId:          m.userId,
-      name:            m.user.name,
-      role:            m.role,
-      totalBreakfast:  memberMeals.filter((meal) => meal.breakfast).length,
-      totalLunch:      memberMeals.filter((meal) => meal.lunch).length,
-      totalDinner:     memberMeals.filter((meal) => meal.dinner).length,
-      totalGuestMeals: memberMeals.reduce((sum, meal) => sum + (meal.guestMeals || 0), 0),
-      totalMeals:      memberMeals.reduce((sum, meal) => sum + meal.totalMeals, 0),
+      userId:           m.userId,
+      name:             m.user.name,
+      role:             m.role,
+      totalBreakfast:   mm.filter((meal) => meal.breakfast).length,
+      totalLunch:       mm.filter((meal) => meal.lunch).length,
+      totalDinner:      mm.filter((meal) => meal.dinner).length,
+      totalGuestBreakfast: mm.reduce((s, meal) => s + (meal.guestBreakfast || 0), 0),
+      totalGuestLunch:     mm.reduce((s, meal) => s + (meal.guestLunch     || 0), 0),
+      totalGuestDinner:    mm.reduce((s, meal) => s + (meal.guestDinner    || 0), 0),
+      totalMeals:       mm.reduce((s, meal) => s + meal.totalMeals, 0),
     };
   });
 
@@ -98,7 +116,6 @@ export async function deleteMeal(req: Request, res: Response) {
     return;
   }
 
-  // Check monthly manager permission for the meal's date
   const { month, year } = monthYearFromDate(meal.date.toISOString());
   const allowed = await assertMonthlyManager(messId, req.userId, month, year, res);
   if (!allowed) return;

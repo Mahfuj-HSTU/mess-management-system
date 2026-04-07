@@ -3,12 +3,14 @@ import express from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
-import messRoutes   from "./routes/mess.routes";
-import mealRoutes   from "./routes/meal.routes";
-import bazaarRoutes from "./routes/bazaar.routes";
-import paymentRoutes from "./routes/payment.routes";
-import reportRoutes from "./routes/report.routes";
-import configRoutes from "./routes/config.routes";
+import messRoutes          from "./routes/mess.routes";
+import mealRoutes          from "./routes/meal.routes";
+import bazaarRoutes        from "./routes/bazaar.routes";
+import paymentRoutes       from "./routes/payment.routes";
+import reportRoutes        from "./routes/report.routes";
+import configRoutes        from "./routes/config.routes";
+import monthlyConfigRoutes from "./routes/monthlyConfig.routes";
+import extraCostRoutes     from "./routes/extraCost.routes";
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
@@ -27,12 +29,14 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.use("/api/mess",           messRoutes);
-app.use("/api/meals/:messId",  mealRoutes);
-app.use("/api/bazaar/:messId", bazaarRoutes);
-app.use("/api/payments/:messId", paymentRoutes);
-app.use("/api/reports/:messId",  reportRoutes);
-app.use("/api/config/:messId",   configRoutes);
+app.use("/api/mess",                    messRoutes);
+app.use("/api/meals/:messId",           mealRoutes);
+app.use("/api/bazaar/:messId",          bazaarRoutes);
+app.use("/api/payments/:messId",        paymentRoutes);
+app.use("/api/reports/:messId",         reportRoutes);
+app.use("/api/config/:messId",          configRoutes);
+app.use("/api/monthly-config/:messId",  monthlyConfigRoutes);
+app.use("/api/extra-costs/:messId",     extraCostRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err.stack);

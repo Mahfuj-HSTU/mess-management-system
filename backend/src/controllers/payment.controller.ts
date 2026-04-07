@@ -6,14 +6,21 @@ import { assertMonthlyManager, monthYearFromDate } from "../lib/permissions";
 // POST /api/payments/:messId
 export async function addPayment(req: Request, res: Response) {
   const messId = req.params.messId;
-  const { memberId, amount, note, date } = req.body;
+  const { memberId, amount, fixedAmount = 0, note, date } = req.body;
 
   if (!memberId || !amount || !date) {
     res.status(400).json({ error: "memberId, amount, and date are required." });
     return;
   }
-  if (Number(amount) <= 0) {
+  const totalAmount = Number(amount);
+  const fixedAmt    = Math.max(0, Number(fixedAmount) || 0);
+
+  if (totalAmount <= 0) {
     res.status(400).json({ error: "Amount must be a positive number." });
+    return;
+  }
+  if (fixedAmt > totalAmount) {
+    res.status(400).json({ error: "Fixed charge cannot exceed total amount." });
     return;
   }
 
@@ -37,10 +44,11 @@ export async function addPayment(req: Request, res: Response) {
     data: {
       messId,
       memberId,
-      amount:    Number(amount),
-      note:      note?.trim() || null,
-      date:      new Date(date),
-      addedById: req.userId,
+      amount:      totalAmount,
+      fixedAmount: fixedAmt,
+      note:        note?.trim() || null,
+      date:        new Date(date),
+      addedById:   req.userId,
     },
     include: {
       member:  { select: { id: true, name: true } },

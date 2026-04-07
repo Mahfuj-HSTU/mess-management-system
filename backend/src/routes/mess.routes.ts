@@ -5,6 +5,7 @@ import {
   getMyMess,
   getMonthlyManager,
   assignMonthlyManager,
+  updateSuperAdminMembership,
   leaveMess,
 } from "../controllers/mess.controller";
 import {
@@ -23,6 +24,7 @@ router.get("/my",        requireAuth, getMyMess);
 router.get("/:messId/monthly-manager",          requireAuth, requireMessMember, getMonthlyManager);
 router.post("/:messId/assign-monthly-manager",  requireAuth, requireMessMember, requireSuperAdmin, assignMonthlyManager);
 
-router.delete("/:messId/leave", requireAuth, requireMessMember, leaveMess);
+router.patch("/:messId/membership", requireAuth, requireMessMember, updateSuperAdminMembership);
+router.delete("/:messId/leave",      requireAuth, requireMessMember, leaveMess);
 
 export default router;

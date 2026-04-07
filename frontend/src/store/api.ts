@@ -108,7 +108,7 @@ export const api = createApi({
 
     addMeal: builder.mutation<void, {
       messId: string; userId: string; date: string;
-      breakfast: boolean; lunch: boolean; dinner: boolean;
+      breakfast: boolean; lunch: boolean; dinner: boolean; guestMeals?: number;
     }>({
       query: ({ messId, ...body }) => ({
         url: `/api/meals/${messId}`, method: "POST", body,

@@ -50,6 +50,7 @@ export interface Meal {
   breakfast: boolean;
   lunch: boolean;
   dinner: boolean;
+  guestMeals: number;
   totalMeals: number;
   addedById: string;
   addedBy?: { name: string };
@@ -62,6 +63,7 @@ export interface MealSummary {
   totalBreakfast: number;
   totalLunch: number;
   totalDinner: number;
+  totalGuestMeals: number;
   totalMeals: number;
 }
 

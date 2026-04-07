@@ -27,6 +27,7 @@ model User {
   paymentsMade     Payment[]        @relation("PaymentAddedBy")
   paymentsReceived Payment[]        @relation("PaymentMember")
   mealConfigsSet   MealConfig[]
+  extraCostsAdded  ExtraCost[]
 }
 
 model Session {
@@ -83,6 +84,8 @@ model Mess {
   payments        Payment[]
   cash            ManagerCash?
   mealConfig      MealConfig?
+  monthlyConfigs  MonthlyConfig[]
+  extraCosts      ExtraCost[]
 }
 
 // Only two permanent roles: super admin (created the mess) and regular member
@@ -175,11 +178,12 @@ model Payment {
   id        String   @id @default(cuid())
   messId    String
   memberId  String
-  amount    Float
-  note      String?
-  date      DateTime @db.Date
-  addedById String
-  createdAt DateTime @default(now())
+  amount      Float
+  fixedAmount Float    @default(0)  // bua + extra charge portion of this payment
+  note        String?
+  date        DateTime @db.Date
+  addedById   String
+  createdAt   DateTime @default(now())
 
   mess    Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
   member  User @relation("PaymentMember", fields: [memberId], references: [id])
@@ -193,4 +197,35 @@ model ManagerCash {
   updatedAt DateTime @updatedAt
 
   mess Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
+}
+
+// Per-month configuration: bua bill + Ramadan (two meal periods) toggle
+model MonthlyConfig {
+  id              String   @id @default(cuid())
+  messId          String
+  month           Int
+  year            Int
+  buaPerMember    Float    @default(0)   // fixed bua bill per member for this month
+  hasRamadan      Boolean  @default(false)
+  ramadanStartDay Int      @default(15) // day of month Ramadan period starts
+  updatedAt       DateTime @updatedAt
+
+  mess Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
+
+  @@unique([messId, month, year])
+}
+
+// Individual extra cost entries (gas, lock, cleaning supplies, etc.)
+model ExtraCost {
+  id        String   @id @default(cuid())
+  messId    String
+  month     Int
+  year      Int
+  name      String
+  amount    Float
+  addedById String
+  createdAt DateTime @default(now())
+
+  mess    Mess @relation(fields: [messId], references: [id], onDelete: Cascade)
+  addedBy User @relation(fields: [addedById], references: [id])
 }

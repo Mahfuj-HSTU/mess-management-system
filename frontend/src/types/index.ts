@@ -13,6 +13,7 @@ export interface MessMember {
   messId: string;
   userId: string;
   role: MemberRole;
+  isMember: boolean;
   joinedAt: string;
   user: User;
 }
@@ -50,7 +51,9 @@ export interface Meal {
   breakfast: boolean;
   lunch: boolean;
   dinner: boolean;
-  guestMeals: number;
+  guestBreakfast: number;
+  guestLunch: number;
+  guestDinner: number;
   totalMeals: number;
   addedById: string;
   addedBy?: { name: string };
@@ -63,7 +66,9 @@ export interface MealSummary {
   totalBreakfast: number;
   totalLunch: number;
   totalDinner: number;
-  totalGuestMeals: number;
+  totalGuestBreakfast: number;
+  totalGuestLunch: number;
+  totalGuestDinner: number;
   totalMeals: number;
 }
 

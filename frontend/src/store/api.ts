@@ -106,9 +106,22 @@ export const api = createApi({
       providesTags: ["Meals"],
     }),
 
+    updateMemberStatus: builder.mutation<
+      { member: { isMember: boolean }; message: string },
+      { messId: string; isMember: boolean }
+    >({
+      query: ({ messId, isMember }) => ({
+        url:    `/api/mess/${messId}/membership`,
+        method: "PATCH",
+        body:   { isMember },
+      }),
+      invalidatesTags: ["Mess"],
+    }),
+
     addMeal: builder.mutation<void, {
       messId: string; userId: string; date: string;
-      breakfast: boolean; lunch: boolean; dinner: boolean; guestMeals?: number;
+      breakfast: boolean; lunch: boolean; dinner: boolean;
+      guestBreakfast?: number; guestLunch?: number; guestDinner?: number;
     }>({
       query: ({ messId, ...body }) => ({
         url: `/api/meals/${messId}`, method: "POST", body,
@@ -206,6 +219,7 @@ export const {
   useGetMyMessQuery,
   useCreateMessMutation,
   useJoinMessMutation,
+  useUpdateMemberStatusMutation,
   useGetMonthlyManagerQuery,
   useAssignMonthlyManagerMutation,
   useGetMealConfigQuery,

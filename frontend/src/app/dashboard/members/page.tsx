@@ -5,6 +5,7 @@ import {
   useGetMyMessQuery,
   useGetMonthlyManagerQuery,
   useAssignMonthlyManagerMutation,
+  useUpdateMemberStatusMutation,
 } from "@/store/api";
 import { useSession } from "@/lib/auth-client";
 import Header from "@/components/dashboard/header";
@@ -41,6 +42,24 @@ export default function MembersPage() {
   const currentManager = managerData?.manager;
 
   const [assignMonthlyManager, { isLoading: assigning }] = useAssignMonthlyManagerMutation();
+  const [updateMemberStatus,   { isLoading: togglingMembership }] = useUpdateMemberStatusMutation();
+
+  const mySuperAdminRecord = isSuperAdmin
+    ? (messData?.mess.members ?? []).find((m) => m.userId === session?.user?.id)
+    : null;
+
+  const handleToggleMembership = async () => {
+    if (!messId || !mySuperAdminRecord) return;
+    const next = !mySuperAdminRecord.isMember;
+    const label = next ? "count yourself as a member" : "remove yourself from meal tracking";
+    if (!confirm(`Are you sure you want to ${label}?`)) return;
+    try {
+      const result = await updateMemberStatus({ messId, isMember: next }).unwrap();
+      toast.success(result.message);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
+    }
+  };
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +99,52 @@ export default function MembersPage() {
             </div>
             <p className="text-sm text-blue-600">Share this code to invite new members</p>
           </div>
+        )}
+
+        {/* ── Super admin membership toggle ── */}
+        {isSuperAdmin && mySuperAdminRecord && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <span className="flex items-center gap-2">
+                  <Crown size={16} className="text-purple-500" />
+                  Your Membership Status
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-800">
+                  Count me as a mess member
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  When enabled, your meals and dues are tracked in reports.
+                  Disable if you manage the mess but don't eat from it.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleMembership}
+                disabled={togglingMembership}
+                className={[
+                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+                  mySuperAdminRecord.isMember ? "bg-primary-600" : "bg-gray-200",
+                  togglingMembership ? "opacity-60 cursor-wait" : "",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
+                    mySuperAdminRecord.isMember ? "translate-x-5" : "translate-x-0",
+                  ].join(" ")}
+                />
+              </button>
+            </div>
+            <p className={`mt-3 text-xs font-medium ${mySuperAdminRecord.isMember ? "text-green-600" : "text-gray-400"}`}>
+              {mySuperAdminRecord.isMember
+                ? "You are currently counted as a member — your meals and dues appear in reports."
+                : "You are currently excluded from meal tracking and reports."}
+            </p>
+          </Card>
         )}
 
         {/* ── Monthly Manager Assignment (super admin only) ── */}

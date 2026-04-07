@@ -1,4 +1,5 @@
-export type MemberRole = "SUPER_ADMIN" | "MANAGER" | "MEMBER";
+// Only two permanent roles — manager is tracked per-month in MonthlyManager
+export type MemberRole = "SUPER_ADMIN" | "MEMBER";
 
 export interface User {
   id: string;
@@ -16,12 +17,29 @@ export interface MessMember {
   user: User;
 }
 
+export interface MonthlyManager {
+  id: string;
+  messId: string;
+  userId: string;
+  month: number;
+  year: number;
+  assignedAt: string;
+  user: User;
+}
+
+export interface MealConfig {
+  breakfast: number; // 0 = disabled/ignored
+  lunch: number;     // default 1
+  dinner: number;    // default 1
+}
+
 export interface Mess {
   id: string;
   name: string;
   code: string;
   createdAt: string;
   members: MessMember[];
+  mealConfig: MealConfig | null;
 }
 
 export interface Meal {
@@ -87,6 +105,7 @@ export interface MonthlyReport {
   totalBazaarCost: number;
   totalMeals: number;
   mealRate: number;
+  monthlyManager: MonthlyManager | null;
   memberReports: MemberReport[];
 }
 

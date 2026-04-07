@@ -3,11 +3,13 @@
 import { useState } from "react";
 import {
   useGetMyMessQuery,
+  useGetMonthlyManagerQuery,
   useGetPaymentsQuery,
   useAddPaymentMutation,
   useDeletePaymentMutation,
   useGetCashBalanceQuery,
 } from "@/store/api";
+import { useSession } from "@/lib/auth-client";
 import Header from "@/components/dashboard/header";
 import MonthSelector from "@/components/dashboard/month-selector";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +31,7 @@ const defaultForm = {
 };
 
 export default function PaymentsPage() {
+  const { data: session } = useSession();
   const [{ month, year }, setMonthYear] = useState(getCurrentMonthYear());
   const [showModal, setShowModal]       = useState(false);
   const [form, setForm]                 = useState(defaultForm);
@@ -36,19 +39,26 @@ export default function PaymentsPage() {
 
   // ── Server data ──────────────────────────────────────────────────────────
   const { data: messData } = useGetMyMessQuery();
-  const messId    = messData?.mess.id ?? "";
-  const role      = messData?.role ?? "MEMBER";
-  const isManager = role === "MANAGER" || role === "SUPER_ADMIN";
+  const messId       = messData?.mess.id ?? "";
+  const isSuperAdmin = messData?.role === "SUPER_ADMIN";
+
+  const { data: managerData } = useGetMonthlyManagerQuery(
+    { messId, month, year },
+    { skip: !messId }
+  );
+  const isMonthlyManager = managerData?.manager?.userId === session?.user?.id;
+  const canSeeCash = isMonthlyManager || isSuperAdmin;
 
   const { data, isLoading } = useGetPaymentsQuery(
     { messId, month, year },
     { skip: !messId }
   );
 
-  // Cash is only fetched for managers — skipped entirely for regular members
-  const { data: cashData } = useGetCashBalanceQuery(messId, {
-    skip: !messId || !isManager,
-  });
+  // Cash is only fetched for monthly manager and super admin
+  const { data: cashData } = useGetCashBalanceQuery(
+    { messId, month, year },
+    { skip: !messId || !canSeeCash }
+  );
 
   const [addPayment,    { isLoading: adding   }] = useAddPaymentMutation();
   const [deletePayment, { isLoading: deleting }] = useDeletePaymentMutation();
@@ -113,12 +123,21 @@ export default function PaymentsPage() {
         {/* Top bar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <MonthSelector month={month} year={year} onChange={(m, y) => setMonthYear({ month: m, year: y })} />
-          {isManager && (
+          {isMonthlyManager && (
             <Button onClick={openModal}>
               <Plus size={16} /> Record Payment
             </Button>
           )}
         </div>
+
+        {/* Manager notice for non-managers */}
+        {!isMonthlyManager && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+            {managerData?.manager
+              ? `${managerData.manager.user.name} is managing payments for this month.`
+              : "No manager assigned for this month — contact the super admin."}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4">
@@ -130,7 +149,7 @@ export default function PaymentsPage() {
             iconColor="text-green-600"
             iconBg="bg-green-50"
           />
-          {isManager ? (
+          {canSeeCash ? (
             <StatsCard
               title="Cash Balance"
               value={formatCurrency(cashData?.balance ?? 0)}
@@ -190,7 +209,7 @@ export default function PaymentsPage() {
                     <span className="text-sm font-bold text-green-600">
                       +{formatCurrency(p.amount)}
                     </span>
-                    {isManager && (
+                    {isMonthlyManager && (
                       <button
                         onClick={() => handleDelete(p.id)}
                         disabled={deleting}

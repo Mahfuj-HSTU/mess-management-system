@@ -3,10 +3,12 @@
 import { useState } from "react";
 import {
   useGetMyMessQuery,
+  useGetMonthlyManagerQuery,
   useGetBazaarsQuery,
   useAddBazaarMutation,
   useDeleteBazaarMutation,
 } from "@/store/api";
+import { useSession } from "@/lib/auth-client";
 import Header from "@/components/dashboard/header";
 import MonthSelector from "@/components/dashboard/month-selector";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +27,7 @@ const defaultForm = {
 };
 
 export default function BazaarPage() {
+  const { data: session } = useSession();
   const [{ month, year }, setMonthYear] = useState(getCurrentMonthYear());
   const [showModal, setShowModal]       = useState(false);
   const [form, setForm]                 = useState(defaultForm);
@@ -32,9 +35,13 @@ export default function BazaarPage() {
 
   // ── Server data ──────────────────────────────────────────────────────────
   const { data: messData } = useGetMyMessQuery();
-  const messId    = messData?.mess.id ?? "";
-  const role      = messData?.role ?? "MEMBER";
-  const isManager = role === "MANAGER" || role === "SUPER_ADMIN";
+  const messId = messData?.mess.id ?? "";
+
+  const { data: managerData } = useGetMonthlyManagerQuery(
+    { messId, month, year },
+    { skip: !messId }
+  );
+  const isMonthlyManager = managerData?.manager?.userId === session?.user?.id;
 
   const { data, isLoading } = useGetBazaarsQuery(
     { messId, month, year },
@@ -91,12 +98,21 @@ export default function BazaarPage() {
         {/* Top bar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <MonthSelector month={month} year={year} onChange={(m, y) => setMonthYear({ month: m, year: y })} />
-          {isManager && (
+          {isMonthlyManager && (
             <Button onClick={() => setShowModal(true)}>
               <Plus size={16} /> Add Bazaar
             </Button>
           )}
         </div>
+
+        {/* Manager notice for non-managers */}
+        {!isMonthlyManager && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+            {managerData?.manager
+              ? `${managerData.manager.user.name} is managing bazaar entries for this month.`
+              : "No manager assigned for this month — contact the super admin."}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4">
@@ -159,7 +175,7 @@ export default function BazaarPage() {
                     <span className="text-sm font-bold text-orange-600">
                       {formatCurrency(b.amount)}
                     </span>
-                    {isManager && (
+                    {isMonthlyManager && (
                       <button
                         onClick={() => handleDelete(b.id)}
                         disabled={deleting}

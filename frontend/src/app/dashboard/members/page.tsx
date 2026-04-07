@@ -1,41 +1,67 @@
 "use client";
 
-import { useGetMyMessQuery, useAssignManagerMutation } from "@/store/api";
+import { useState } from "react";
+import {
+  useGetMyMessQuery,
+  useGetMonthlyManagerQuery,
+  useAssignMonthlyManagerMutation,
+} from "@/store/api";
 import { useSession } from "@/lib/auth-client";
 import Header from "@/components/dashboard/header";
+import MonthSelector from "@/components/dashboard/month-selector";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import Button from "@/components/ui/button";
 import Badge from "@/components/ui/badge";
-import { Users, Crown, Shield, User } from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import type { MemberRole } from "@/types";
+import Select from "@/components/ui/select";
+import { Users, Crown, User, Shield, ChevronRight } from "lucide-react";
+import { formatDate, getCurrentMonthYear, MONTHS } from "@/lib/utils";
+import type { MemberRole, MessMember } from "@/types";
 import toast from "react-hot-toast";
 
-// Role display config
-const ROLE_CONFIG: Record<MemberRole, { label: string; badgeVariant: "purple" | "info" | "default"; icon: React.ReactNode }> = {
-  SUPER_ADMIN: { label: "Super Admin", badgeVariant: "purple", icon: <Crown size={12} /> },
-  MANAGER:     { label: "Manager",     badgeVariant: "info",   icon: <Shield size={12} /> },
-  MEMBER:      { label: "Member",      badgeVariant: "default", icon: <User size={12} /> },
+const ROLE_CONFIG: Record<MemberRole, { label: string; badgeVariant: "purple" | "default" }> = {
+  SUPER_ADMIN: { label: "Super Admin", badgeVariant: "purple" },
+  MEMBER:      { label: "Member",      badgeVariant: "default" },
 };
 
 export default function MembersPage() {
-  const { data: session }                              = useSession();
-  const { data: messData, isLoading }                  = useGetMyMessQuery();
-  const [assignManager, { isLoading: assigning }]     = useAssignManagerMutation();
+  const { data: session }  = useSession();
+  const { data: messData } = useGetMyMessQuery();
+  const [{ month, year }, setMonthYear] = useState(getCurrentMonthYear());
+  const [selectedUserId, setSelectedUserId] = useState("");
 
-  const role         = messData?.role ?? "MEMBER";
+  const messId    = messData?.mess.id ?? "";
+  const role      = messData?.role    ?? "MEMBER";
   const isSuperAdmin = role === "SUPER_ADMIN";
 
-  const handleAssignManager = async (userId: string, name: string) => {
-    if (!messData) return;
-    if (!confirm(`Assign "${name}" as manager? The current manager will be demoted.`)) return;
+  // Fetch who the monthly manager is for the selected month
+  const { data: managerData, isLoading: managerLoading } = useGetMonthlyManagerQuery(
+    { messId, month, year },
+    { skip: !messId }
+  );
+  const currentManager = managerData?.manager;
+
+  const [assignMonthlyManager, { isLoading: assigning }] = useAssignMonthlyManagerMutation();
+
+  const handleAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserId || !messId) return;
+
+    const member = messData?.mess.members.find((m) => m.userId === selectedUserId);
+    if (!confirm(`Assign "${member?.user.name}" as manager for ${MONTHS[month - 1]} ${year}?`)) return;
+
     try {
-      const result = await assignManager({ messId: messData.mess.id, userId }).unwrap();
+      const result = await assignMonthlyManager({ messId, userId: selectedUserId, month, year }).unwrap();
       toast.success(result.message);
+      setSelectedUserId("");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     }
   };
+
+  // Only non-super-admin members can be assigned as manager
+  const assignableMembers = (messData?.mess.members ?? [])
+    .filter((m: MessMember) => m.role !== "SUPER_ADMIN")
+    .map((m: MessMember) => ({ value: m.userId, label: m.user.name }));
 
   return (
     <div className="flex flex-col h-full">
@@ -56,87 +82,123 @@ export default function MembersPage() {
           </div>
         )}
 
+        {/* ── Monthly Manager Assignment (super admin only) ── */}
+        {isSuperAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <span className="flex items-center gap-2">
+                  <Shield size={18} className="text-primary-500" />
+                  Assign Monthly Manager
+                </span>
+              </CardTitle>
+              <MonthSelector month={month} year={year} onChange={(m, y) => setMonthYear({ month: m, year: y })} />
+            </CardHeader>
+
+            {/* Current manager for selected month */}
+            <div className="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Manager for {MONTHS[month - 1]} {year}
+              </p>
+              {managerLoading ? (
+                <p className="text-sm text-gray-400">Loading...</p>
+              ) : currentManager ? (
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 text-xs font-bold">
+                    {currentManager.user.name[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{currentManager.user.name}</p>
+                    <p className="text-xs text-gray-500">{currentManager.user.email}</p>
+                  </div>
+                  <Badge variant="info" className="ml-auto">Active Manager</Badge>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 italic">No manager assigned for this month yet</p>
+              )}
+            </div>
+
+            {/* Assign form */}
+            <form onSubmit={handleAssign} className="flex gap-3 items-end">
+              <div className="flex-1">
+                <Select
+                  label="Select Member to Assign"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  options={[{ value: "", label: "— Choose a member —" }, ...assignableMembers]}
+                />
+              </div>
+              <Button type="submit" loading={assigning} disabled={!selectedUserId} className="shrink-0">
+                <ChevronRight size={16} />
+                Assign
+              </Button>
+            </form>
+
+            <p className="mt-3 text-xs text-gray-400">
+              Each month can have one manager. Assigning a new manager for the same month will
+              replace the previous one — they lose manager access for that month only.
+            </p>
+          </Card>
+        )}
+
+        {/* ── Members list ── */}
         <Card>
           <CardHeader>
             <CardTitle>
               <span className="flex items-center gap-2">
                 <Users size={18} className="text-gray-400" />
-                Members ({messData?.mess.members.length ?? 0})
+                All Members ({messData?.mess.members.length ?? 0})
               </span>
             </CardTitle>
           </CardHeader>
 
-          {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {messData?.mess.members.map((m) => {
-                const rc           = ROLE_CONFIG[m.role];
-                const isCurrentUser = m.userId === session?.user?.id;
-                // Super admin can assign any non-admin, non-manager member as manager
-                const canPromote   = isSuperAdmin && m.role === "MEMBER" && !isCurrentUser;
+          <div className="space-y-2">
+            {(messData?.mess.members ?? []).map((m) => {
+              const rc            = ROLE_CONFIG[m.role];
+              const isCurrentUser = m.userId === session?.user?.id;
+              const isMonthManager = currentManager?.userId === m.userId;
 
-                return (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100"
-                  >
-                    {/* Avatar + info */}
-                    <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                        m.role === "SUPER_ADMIN" ? "bg-purple-100 text-purple-700" :
-                        m.role === "MANAGER"     ? "bg-blue-100 text-blue-700"     :
-                                                   "bg-gray-100 text-gray-600"
-                      }`}>
-                        {m.user.name[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-semibold text-gray-900">{m.user.name}</p>
-                          {isCurrentUser && <span className="text-xs text-gray-400">(you)</span>}
-                        </div>
-                        <p className="text-xs text-gray-500">{m.user.email}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Joined {formatDate(m.joinedAt)}</p>
-                      </div>
+              return (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                      m.role === "SUPER_ADMIN" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"
+                    }`}>
+                      {m.user.name[0].toUpperCase()}
                     </div>
-
-                    {/* Badge + action */}
-                    <div className="flex items-center gap-2">
-                      <Badge variant={rc.badgeVariant}>
-                        <span className="flex items-center gap-1">{rc.icon} {rc.label}</span>
-                      </Badge>
-                      {canPromote && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          loading={assigning}
-                          onClick={() => handleAssignManager(m.userId, m.user.name)}
-                        >
-                          <Shield size={13} /> Make Manager
-                        </Button>
-                      )}
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-gray-900">{m.user.name}</p>
+                        {isCurrentUser && <span className="text-xs text-gray-400">(you)</span>}
+                      </div>
+                      <p className="text-xs text-gray-500">{m.user.email}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Joined {formatDate(m.joinedAt)}</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
 
-        {/* Tip for super admin */}
-        {isSuperAdmin && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <p className="text-sm font-semibold text-amber-800 mb-1">Super Admin Note</p>
-            <p className="text-sm text-amber-700">
-              You can assign any member as manager. The current manager will automatically be
-              demoted. Only one manager is allowed at a time.
-            </p>
+                  <div className="flex items-center gap-2">
+                    {isMonthManager && (
+                      <Badge variant="info">
+                        <span className="flex items-center gap-1">
+                          <Shield size={11} /> {MONTHS[month - 1]} Manager
+                        </span>
+                      </Badge>
+                    )}
+                    <Badge variant={rc.badgeVariant}>
+                      <span className="flex items-center gap-1">
+                        {m.role === "SUPER_ADMIN" ? <Crown size={11} /> : <User size={11} />}
+                        {rc.label}
+                      </span>
+                    </Badge>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </Card>
 
       </div>
     </div>
@@ -145,8 +207,7 @@ export default function MembersPage() {
 
 function getErrorMessage(err: unknown): string {
   if (typeof err === "object" && err !== null && "data" in err) {
-    const e = err as { data?: { error?: string } };
-    return e.data?.error ?? "Something went wrong";
+    return (err as { data?: { error?: string } }).data?.error ?? "Something went wrong";
   }
   return "Something went wrong";
 }

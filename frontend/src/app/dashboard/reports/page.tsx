@@ -3,10 +3,12 @@
 import { useState } from "react";
 import {
   useGetMyMessQuery,
+  useGetMonthlyManagerQuery,
   useGetMonthlyReportQuery,
   useGetReportHistoryQuery,
   useSendRemindersMutation,
 } from "@/store/api";
+import { useSession } from "@/lib/auth-client";
 import Header from "@/components/dashboard/header";
 import MonthSelector from "@/components/dashboard/month-selector";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,13 +19,18 @@ import { formatCurrency, getCurrentMonthYear } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 export default function ReportsPage() {
+  const { data: session } = useSession();
   const [{ month, year }, setMonthYear] = useState(getCurrentMonthYear());
 
   // ── Server data ──────────────────────────────────────────────────────────
   const { data: messData }   = useGetMyMessQuery();
-  const messId    = messData?.mess.id ?? "";
-  const role      = messData?.role ?? "MEMBER";
-  const isManager = role === "MANAGER" || role === "SUPER_ADMIN";
+  const messId = messData?.mess.id ?? "";
+
+  const { data: managerData } = useGetMonthlyManagerQuery(
+    { messId, month, year },
+    { skip: !messId }
+  );
+  const isMonthlyManager = managerData?.manager?.userId === session?.user?.id;
 
   const { data: report, isLoading: reportLoading } = useGetMonthlyReportQuery(
     { messId, month, year },
@@ -62,7 +69,7 @@ export default function ReportsPage() {
         {/* Top bar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <MonthSelector month={month} year={year} onChange={(m, y) => setMonthYear({ month: m, year: y })} />
-          {isManager && (
+          {isMonthlyManager && (
             <Button variant="outline" onClick={handleSendReminders} loading={sending}>
               <Mail size={16} /> Send Due Reminders
             </Button>

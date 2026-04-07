@@ -3,9 +3,11 @@
 import { useState } from "react";
 import {
   useGetMyMessQuery,
+  useGetMonthlyManagerQuery,
   useGetMonthlyReportQuery,
   useGetCashBalanceQuery,
 } from "@/store/api";
+import { useSession } from "@/lib/auth-client";
 import Header from "@/components/dashboard/header";
 import MonthSelector from "@/components/dashboard/month-selector";
 import StatsCard from "@/components/ui/stats-card";
@@ -19,23 +21,31 @@ import { formatCurrency, getCurrentMonthYear } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
   const [{ month, year }, setMonthYear] = useState(getCurrentMonthYear());
   const [codeCopied, setCodeCopied] = useState(false);
 
   const { data: messData } = useGetMyMessQuery();
-  const messId = messData?.mess.id ?? "";
-  const role   = messData?.role ?? "MEMBER";
-  const isManager = role === "MANAGER" || role === "SUPER_ADMIN";
+  const messId       = messData?.mess.id ?? "";
+  const isSuperAdmin = messData?.role === "SUPER_ADMIN";
+
+  const { data: managerData } = useGetMonthlyManagerQuery(
+    { messId, month, year },
+    { skip: !messId }
+  );
+  const isMonthlyManager = managerData?.manager?.userId === session?.user?.id;
+  const canSeeCash = isMonthlyManager || isSuperAdmin;
 
   const { data: report, isLoading: reportLoading } = useGetMonthlyReportQuery(
     { messId, month, year },
     { skip: !messId }
   );
 
-  // Cash balance is only fetched for managers (regular members never see it)
-  const { data: cashData } = useGetCashBalanceQuery(messId, {
-    skip: !messId || !isManager,
-  });
+  // Cash balance is only fetched for monthly manager and super admin
+  const { data: cashData } = useGetCashBalanceQuery(
+    { messId, month, year },
+    { skip: !messId || !canSeeCash }
+  );
 
   const copyCode = () => {
     if (!messData) return;
@@ -101,7 +111,7 @@ export default function DashboardPage() {
             iconColor="text-green-600"
             iconBg="bg-green-50"
           />
-          {isManager ? (
+          {canSeeCash ? (
             <StatsCard
               title="Cash Balance"
               value={formatCurrency(cashData?.balance ?? 0)}
@@ -164,7 +174,7 @@ export default function DashboardPage() {
                           <div>
                             <p className="text-sm font-medium text-gray-900">{m.name}</p>
                             <p className="text-xs text-gray-400 capitalize">
-                              {m.role.replace("_", " ").toLowerCase()}
+                              {m.role === "SUPER_ADMIN" ? "Super Admin" : "Member"}
                             </p>
                           </div>
                         </div>
@@ -200,10 +210,8 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-400">{m.user.email}</p>
                   </div>
                 </div>
-                <Badge
-                  variant={m.role === "SUPER_ADMIN" ? "purple" : m.role === "MANAGER" ? "info" : "default"}
-                >
-                  {m.role === "SUPER_ADMIN" ? "Super Admin" : m.role === "MANAGER" ? "Manager" : "Member"}
+                <Badge variant={m.role === "SUPER_ADMIN" ? "purple" : "default"}>
+                  {m.role === "SUPER_ADMIN" ? "Super Admin" : "Member"}
                 </Badge>
               </div>
             ))}

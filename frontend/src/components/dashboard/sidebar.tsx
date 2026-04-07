@@ -16,6 +16,8 @@ import {
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import { useDispatch } from "react-redux";
+import { api } from "@/store/api";
 import { MemberRole } from "@/types";
 
 interface SidebarProps {
@@ -44,25 +46,18 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const dispatch = useDispatch();
 
   const handleSignOut = async () => {
     await signOut();
+    dispatch(api.util.resetApiState());
     router.push("/login");
   };
 
-  const roleLabel =
-    userRole === "SUPER_ADMIN"
-      ? "Super Admin"
-      : userRole === "MANAGER"
-      ? "Manager"
-      : "Member";
-
-  const roleBadgeColor =
-    userRole === "SUPER_ADMIN"
-      ? "bg-purple-100 text-purple-700"
-      : userRole === "MANAGER"
-      ? "bg-blue-100 text-blue-700"
-      : "bg-gray-100 text-gray-600";
+  const roleLabel = userRole === "SUPER_ADMIN" ? "Super Admin" : "Member";
+  const roleBadgeColor = userRole === "SUPER_ADMIN"
+    ? "bg-purple-100 text-purple-700"
+    : "bg-gray-100 text-gray-600";
 
   return (
     <>

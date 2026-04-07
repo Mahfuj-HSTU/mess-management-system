@@ -10,6 +10,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   Mess, MemberRole, Meal, MealSummary, MealConfig,
   Bazaar, Payment, MonthlyManager, MonthlyReport, ReportHistoryItem,
+  MonthlyConfig, ExtraCost,
 } from "@/types";
 
 // ─── Response types ───────────────────────────────────────────────────────────
@@ -22,6 +23,8 @@ interface CashResponse              { balance: number }
 interface MealConfigResponse        { config: MealConfig }
 interface MonthlyManagerResponse    { manager: MonthlyManager | null }
 interface ReportHistoryResponse     { history: ReportHistoryItem[] }
+interface MonthlyConfigResponse     { config: MonthlyConfig }
+interface ExtraCostsResponse        { costs: ExtraCost[]; total: number }
 
 interface MonthParams { messId: string; month: number; year: number }
 
@@ -35,7 +38,7 @@ export const api = createApi({
     credentials: "include",
   }),
 
-  tagTypes: ["Mess", "MonthlyManager", "Meals", "Bazaar", "Payments", "Cash", "Report", "MealConfig"],
+  tagTypes: ["Mess", "MonthlyManager", "Meals", "Bazaar", "Payments", "Cash", "Report", "MealConfig", "MonthlyConfig", "ExtraCosts"],
 
   endpoints: (builder) => ({
 
@@ -169,7 +172,7 @@ export const api = createApi({
     }),
 
     addPayment: builder.mutation<void, {
-      messId: string; memberId: string; amount: number; note?: string; date: string;
+      messId: string; memberId: string; amount: number; fixedAmount?: number; note?: string; date: string;
     }>({
       query: ({ messId, ...body }) => ({
         url: `/api/payments/${messId}`, method: "POST", body,
@@ -212,6 +215,50 @@ export const api = createApi({
         body:   { month, year },
       }),
     }),
+
+    // ── Monthly Config (bua bill + Ramadan) ───────────────────────────────
+
+    getMonthlyConfig: builder.query<MonthlyConfigResponse, MonthParams>({
+      query:        ({ messId, month, year }) =>
+        `/api/monthly-config/${messId}?month=${month}&year=${year}`,
+      providesTags: ["MonthlyConfig"],
+    }),
+
+    updateMonthlyConfig: builder.mutation<
+      MonthlyConfigResponse,
+      { messId: string; month: number; year: number } & Partial<MonthlyConfig>
+    >({
+      query: ({ messId, ...body }) => ({
+        url:    `/api/monthly-config/${messId}`,
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: ["MonthlyConfig", "Report"],
+    }),
+
+    // ── Extra Costs ───────────────────────────────────────────────────────
+
+    getExtraCosts: builder.query<ExtraCostsResponse, MonthParams>({
+      query:        ({ messId, month, year }) =>
+        `/api/extra-costs/${messId}?month=${month}&year=${year}`,
+      providesTags: ["ExtraCosts"],
+    }),
+
+    addExtraCost: builder.mutation<{ cost: ExtraCost }, {
+      messId: string; name: string; amount: number; month: number; year: number;
+    }>({
+      query: ({ messId, ...body }) => ({
+        url: `/api/extra-costs/${messId}`, method: "POST", body,
+      }),
+      invalidatesTags: ["ExtraCosts", "Report"],
+    }),
+
+    deleteExtraCost: builder.mutation<void, { messId: string; costId: string }>({
+      query: ({ messId, costId }) => ({
+        url: `/api/extra-costs/${messId}/${costId}`, method: "DELETE",
+      }),
+      invalidatesTags: ["ExtraCosts", "Report"],
+    }),
   }),
 });
 
@@ -237,4 +284,9 @@ export const {
   useGetMonthlyReportQuery,
   useGetReportHistoryQuery,
   useSendRemindersMutation,
+  useGetMonthlyConfigQuery,
+  useUpdateMonthlyConfigMutation,
+  useGetExtraCostsQuery,
+  useAddExtraCostMutation,
+  useDeleteExtraCostMutation,
 } = api;

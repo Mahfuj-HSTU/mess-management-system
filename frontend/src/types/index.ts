@@ -88,6 +88,7 @@ export interface Payment {
   messId: string;
   memberId: string;
   amount: number;
+  fixedAmount: number;
   note?: string | null;
   date: string;
   addedById: string;
@@ -95,25 +96,73 @@ export interface Payment {
   addedBy?: { id: string; name: string };
 }
 
+export interface MonthlyConfig {
+  messId?: string;
+  month?: number;
+  year?: number;
+  buaPerMember: number;
+  hasRamadan: boolean;
+  ramadanStartDay: number;
+}
+
+export interface ExtraCost {
+  id: string;
+  messId: string;
+  month: number;
+  year: number;
+  name: string;
+  amount: number;
+  addedById: string;
+  addedBy?: { id: string; name: string };
+  createdAt: string;
+}
+
 export interface MemberReport {
   userId: string;
   name: string;
   email: string;
-  role: MemberRole;
+  period1Meals: number;
+  period2Meals: number;
   totalMeals: number;
   mealCost: number;
   totalPaid: number;
+  mealPaid: number;
+  fixedPaid: number;
+  fixedCharge: number;
+  mealDue: number;
+  fixedDue: number;
+  managerGets: number;
+  memberGets: number;
   due: number;
+}
+
+export interface PeriodSummary {
+  totalBazaar: number;
+  totalMeals: number;
+  mealRate: number;
 }
 
 export interface MonthlyReport {
   month: number;
   year: number;
   monthName: string;
+  monthlyManager: MonthlyManager | null;
+  // Meal totals
   totalBazaarCost: number;
   totalMeals: number;
   mealRate: number;
-  monthlyManager: MonthlyManager | null;
+  // Bua
+  buaPerMember: number;
+  totalBuaBill: number;
+  // Extra costs
+  totalExtraCosts: number;
+  extraPerMember: number;
+  fixedChargePerMember: number;
+  // Ramadan
+  hasRamadan: boolean;
+  ramadanStartDay: number;
+  period1: PeriodSummary | null;
+  period2: PeriodSummary | null;
   memberReports: MemberReport[];
 }
 

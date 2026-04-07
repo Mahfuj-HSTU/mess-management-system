@@ -28,6 +28,10 @@ export async function addPayment(req: Request, res: Response) {
     res.status(404).json({ error: "Member not found in this mess." });
     return;
   }
+  if (!member.isMember) {
+    res.status(400).json({ error: "This member has opted out of meal tracking." });
+    return;
+  }
 
   const payment = await prisma.payment.create({
     data: {

@@ -160,6 +160,7 @@ model Meal {
 model Bazaar {
   id          String   @id @default(cuid())
   messId      String
+  name        String
   amount      Float
   description String?
   date        DateTime @db.Date

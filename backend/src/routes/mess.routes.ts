@@ -3,8 +3,8 @@ import {
   createMess,
   joinMess,
   getMyMess,
-  getMessById,
-  assignManager,
+  getMonthlyManager,
+  assignMonthlyManager,
   leaveMess,
 } from "../controllers/mess.controller";
 import {
@@ -15,17 +15,14 @@ import {
 
 const router = Router();
 
-router.post("/create", requireAuth, createMess);
-router.post("/join", requireAuth, joinMess);
-router.get("/my", requireAuth, getMyMess);
-router.get("/:messId", requireAuth, requireMessMember, getMessById);
-router.post(
-  "/:messId/assign-manager",
-  requireAuth,
-  requireMessMember,
-  requireSuperAdmin,
-  assignManager
-);
+router.post("/create",   requireAuth, createMess);
+router.post("/join",     requireAuth, joinMess);
+router.get("/my",        requireAuth, getMyMess);
+
+// Monthly manager routes
+router.get("/:messId/monthly-manager",          requireAuth, requireMessMember, getMonthlyManager);
+router.post("/:messId/assign-monthly-manager",  requireAuth, requireMessMember, requireSuperAdmin, assignMonthlyManager);
+
 router.delete("/:messId/leave", requireAuth, requireMessMember, leaveMess);
 
 export default router;

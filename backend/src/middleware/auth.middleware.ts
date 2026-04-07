@@ -8,17 +8,14 @@ declare global {
   namespace Express {
     interface Request {
       userId: string;
-      messId?: string;
-      memberRole?: MemberRole;
+      messId: string;
+      memberRole: MemberRole;
     }
   }
 }
 
-export async function requireAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
+/** Verify the session cookie and attach userId to the request. */
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
@@ -32,14 +29,11 @@ export async function requireAuth(
   next();
 }
 
-export async function requireMessMember(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  const messId = req.params.messId || req.body.messId;
+/** Verify the user belongs to the mess and attach messId + memberRole. */
+export async function requireMessMember(req: Request, res: Response, next: NextFunction) {
+  const messId = req.params.messId ?? req.body.messId;
   if (!messId) {
-    res.status(400).json({ error: "messId is required" });
+    res.status(400).json({ error: "messId is required." });
     return;
   }
 
@@ -52,37 +46,15 @@ export async function requireMessMember(
     return;
   }
 
-  req.messId = messId;
+  req.messId     = messId;
   req.memberRole = member.role;
   next();
 }
 
-export async function requireManager(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
-  if (
-    req.memberRole !== MemberRole.MANAGER &&
-    req.memberRole !== MemberRole.SUPER_ADMIN
-  ) {
-    res
-      .status(403)
-      .json({ error: "Only the manager can perform this action." });
-    return;
-  }
-  next();
-}
-
-export async function requireSuperAdmin(
-  req: Request,
-  res: Response,
-  next: NextFunction
-) {
+/** Only the super admin (the mess creator) may proceed. */
+export async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.memberRole !== MemberRole.SUPER_ADMIN) {
-    res
-      .status(403)
-      .json({ error: "Only the super admin can perform this action." });
+    res.status(403).json({ error: "Only the super admin can perform this action." });
     return;
   }
   next();

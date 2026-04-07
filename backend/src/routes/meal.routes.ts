@@ -1,21 +1,12 @@
 import { Router } from "express";
-import {
-  addMeal,
-  getMeals,
-  getMemberMeals,
-  deleteMeal,
-} from "../controllers/meal.controller";
-import {
-  requireAuth,
-  requireMessMember,
-  requireManager,
-} from "../middleware/auth.middleware";
+import { addMeal, getMeals, deleteMeal } from "../controllers/meal.controller";
+import { requireAuth, requireMessMember } from "../middleware/auth.middleware";
 
 const router = Router({ mergeParams: true });
 
-router.get("/", requireAuth, requireMessMember, getMeals);
-router.post("/", requireAuth, requireMessMember, requireManager, addMeal);
-router.get("/member/:userId", requireAuth, requireMessMember, getMemberMeals);
-router.delete("/:mealId", requireAuth, requireMessMember, requireManager, deleteMeal);
+// All members can view; monthly manager permission is checked inside the controller
+router.get("/",           requireAuth, requireMessMember, getMeals);
+router.post("/",          requireAuth, requireMessMember, addMeal);
+router.delete("/:mealId", requireAuth, requireMessMember, deleteMeal);
 
 export default router;

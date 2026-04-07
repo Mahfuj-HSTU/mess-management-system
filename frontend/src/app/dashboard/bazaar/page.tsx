@@ -21,6 +21,7 @@ import { formatCurrency, formatDate, getCurrentMonthYear } from "@/lib/utils";
 import toast from "react-hot-toast";
 
 const defaultForm = {
+  name:        "",
   amount:      "",
   description: "",
   date:        new Date().toISOString().split("T")[0],
@@ -54,6 +55,7 @@ export default function BazaarPage() {
   // ── Handlers ──────────────────────────────────────────────────────────────
   const validate = () => {
     const e: Record<string, string> = {};
+    if (!form.name.trim()) e.name = "Name is required";
     if (!form.amount) e.amount = "Amount is required";
     else if (Number(form.amount) <= 0) e.amount = "Must be a positive number";
     if (!form.date) e.date = "Date is required";
@@ -67,6 +69,7 @@ export default function BazaarPage() {
     try {
       await addBazaar({
         messId,
+        name:        form.name.trim(),
         amount:      Number(form.amount),
         description: form.description || undefined,
         date:        form.date,
@@ -163,11 +166,10 @@ export default function BazaarPage() {
                       <ShoppingCart size={16} className="text-orange-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {b.description || "Grocery purchase"}
-                      </p>
+                      <p className="text-sm font-medium text-gray-900">{b.name}</p>
                       <p className="text-xs text-gray-500">
-                        {formatDate(b.date)} · Added by {b.addedBy?.name ?? "Manager"}
+                        {b.description && <span>{b.description} · </span>}
+                        {formatDate(b.date)} · by {b.addedBy?.name ?? "Manager"}
                       </p>
                     </div>
                   </div>
@@ -197,6 +199,13 @@ export default function BazaarPage() {
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Add Bazaar Entry">
         <form onSubmit={handleAdd} className="space-y-4">
           <Input
+            label="Name"
+            placeholder="e.g. Fish, Vegetables, Rice"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            error={errors.name}
+          />
+          <Input
             label="Amount (৳)"
             type="number"
             placeholder="e.g. 850"
@@ -207,18 +216,18 @@ export default function BazaarPage() {
             error={errors.amount}
           />
           <Input
-            label="Description (optional)"
-            placeholder="e.g. Vegetables, Fish"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-          <Input
             label="Date"
             type="date"
             value={form.date}
             max={new Date().toISOString().split("T")[0]}
             onChange={(e) => setForm({ ...form, date: e.target.value })}
             error={errors.date}
+          />
+          <Input
+            label="Description (optional)"
+            placeholder="Any extra notes..."
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowModal(false)}>Cancel</Button>

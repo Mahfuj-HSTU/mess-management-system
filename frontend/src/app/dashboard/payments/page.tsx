@@ -65,7 +65,7 @@ export default function PaymentsPage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const openModal = () => {
-    const firstMember = messData?.mess.members[0]?.userId ?? "";
+    const firstMember = (messData?.mess.members ?? []).find((m) => m.isMember)?.userId ?? "";
     setForm({ ...defaultForm, memberId: firstMember });
     setShowModal(true);
   };
@@ -109,7 +109,9 @@ export default function PaymentsPage() {
     }
   };
 
-  const memberOptions = (messData?.mess.members ?? []).map((m: MessMember) => ({
+  // Only show members who are opted in (isMember = true)
+  const activeMembers = (messData?.mess.members ?? []).filter((m: MessMember) => m.isMember);
+  const memberOptions = activeMembers.map((m: MessMember) => ({
     value: m.userId,
     label: m.user.name,
   }));

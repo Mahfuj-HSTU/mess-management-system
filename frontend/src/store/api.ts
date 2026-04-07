@@ -145,7 +145,7 @@ export const api = createApi({
     }),
 
     addBazaar: builder.mutation<void, {
-      messId: string; amount: number; description?: string; date: string;
+      messId: string; name: string; amount: number; description?: string; date: string;
     }>({
       query: ({ messId, ...body }) => ({
         url: `/api/bazaar/${messId}`, method: "POST", body,

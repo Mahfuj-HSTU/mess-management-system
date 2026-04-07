@@ -75,6 +75,7 @@ export interface MealSummary {
 export interface Bazaar {
   id: string;
   messId: string;
+  name: string;
   amount: number;
   description?: string | null;
   date: string;
